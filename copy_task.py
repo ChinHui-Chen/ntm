@@ -34,6 +34,7 @@ def main():
 def train(args):
     model_list = [NTMCopyModel(args, 1)]
     for seq_length in range(2, args.max_seq_length + 1):
+        print ( "append model list %s/%s" %(seq_length, args.max_seq_length)  )
         model_list.append(NTMCopyModel(args, seq_length, reuse=True))
     # model = NTM_model(args, args.max_seq_length)
     with tf.Session() as sess:

@@ -4,13 +4,17 @@ import numpy as np
 
 class NTMCopyModel():
     def __init__(self, args, seq_length, reuse=False):
+        # prepare var (batch_size, seq_length, vec_dim)
         self.x = tf.placeholder(name='x', dtype=tf.float32, shape=[args.batch_size, seq_length, args.vector_dim])
         self.y = self.x
-        eof = np.zeros([args.batch_size, args.vector_dim + 1])
-        eof[:, args.vector_dim] = np.ones([args.batch_size])
-        eof = tf.constant(eof, dtype=tf.float32)
-        zero = tf.constant(np.zeros([args.batch_size, args.vector_dim + 1]), dtype=tf.float32)
+        # prepare eof
+        eof = np.zeros([args.batch_size, args.vector_dim + 1]) # one line eof (batch_size, vect_dim+1)
+        eof[:, args.vector_dim] = np.ones([args.batch_size])   # add delimiter 
+        eof = tf.constant(eof, dtype=tf.float32)               # change to const
+        # prepare zero
+        zero = tf.constant(np.zeros([args.batch_size, args.vector_dim + 1]), dtype=tf.float32) # one line zero (batch_size, vect_dim+1)
 
+        # initialize cell
         if args.model == 'LSTM':
             # single_cell = tf.nn.rnn_cell.BasicLSTMCell(args.rnn_size)
             # cannot use [single_cell] * 3 in tensorflow 1.2
@@ -23,32 +27,34 @@ class NTMCopyModel():
                                     addressing_mode='content_and_location',
                                     reuse=reuse,
                                     output_dim=args.vector_dim)
-
+        # start to input data
         state = cell.zero_state(args.batch_size, tf.float32)
         self.state_list = [state]
         for t in range(seq_length):
-            output, state = cell(tf.concat([self.x[:, t, :], np.zeros([args.batch_size, 1])], axis=1), state)
+            output, state = cell( tf.concat([self.x[:, t, :], np.zeros([args.batch_size, 1])], axis=1) , state )
             self.state_list.append(state)
         output, state = cell(eof, state)
         self.state_list.append(state)
-
+        # start to collect output
         self.o = []
         for t in range(seq_length):
             output, state = cell(zero, state)
-            self.o.append(output[:, 0:args.vector_dim])
+            self.o.append(output[:, 0:args.vector_dim]) # (seq_length, batch_size, vec_dim)
             self.state_list.append(state)
-        self.o = tf.sigmoid(tf.transpose(self.o, perm=[1, 0, 2]))
+        self.o = tf.sigmoid( tf.transpose(self.o, perm=[1, 0, 2]) ) # to (batch_size, seq_length, vec_dim)
 
         # self.copy_loss = tf.reduce_mean(tf.reduce_sum(tf.square(self.y - self.o), reduction_indices=[1, 2]))
         eps = 1e-8
         self.copy_loss = -tf.reduce_mean(   # cross entropy function
-            self.y * tf.log(self.o + eps) + (1 - self.y) * tf.log(1 - self.o + eps)
+            self.y * tf.log(self.o + eps) + (1 - self.y) * tf.log(1 - self.o + eps)     #both are (batch_size, seq_length, vec_dim)
         )
+        # setup train_op for optimization
         with tf.variable_scope('optimizer', reuse=reuse):
             self.optimizer = tf.train.RMSPropOptimizer(learning_rate=args.learning_rate, momentum=0.9, decay=0.95)
             gvs = self.optimizer.compute_gradients(self.copy_loss)
             capped_gvs = [(tf.clip_by_value(grad, -10., 10.), var) for grad, var in gvs]
             self.train_op = self.optimizer.apply_gradients(capped_gvs)
+        # setup summary info (for tensorboard)
         self.copy_loss_summary = tf.summary.scalar('copy_loss_%d' % seq_length, self.copy_loss)
         # self.merged_summary = tf.summary.merge(self.copy_loss_summary)
 

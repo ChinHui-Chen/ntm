@@ -81,16 +81,21 @@ def train(args):
 def test(args):
     model = NTMCopyModel(args, args.test_seq_length)
     saver = tf.train.Saver()
-    ckpt = tf.train.get_checkpoint_state(args.save_dir)
+    ckpt = tf.train.get_checkpoint_state(args.save_dir + '/' + args.model)
     with tf.Session() as sess:
         saver.restore(sess, ckpt.model_checkpoint_path)
+        # generate data (batch_size, test_seq_length, vec_dim)
         x = generate_random_strings(args.batch_size, args.test_seq_length, args.vector_dim)
         feed_dict = {model.x: x}
-        output, copy_loss, state_list = sess.run([model.o, model.copy_loss, model.state_list], feed_dict=feed_dict)
+        # run model
+        output, copy_loss, state_list = sess.run( [model.o, model.copy_loss, model.state_list], feed_dict=feed_dict )
+        # for each batch, print input and output
         for p in range(args.batch_size):
             print(x[p, :, :])
             print(output[p, :, :])
+        # print total loss in this batch_size
         print('copy_loss: %g' % copy_loss)
+        # plot NTM state
         if args.model == 'NTM':
             w_plot = []
             for state in state_list:

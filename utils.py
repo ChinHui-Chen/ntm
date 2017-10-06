@@ -11,6 +11,30 @@ def generate_random_strings(batch_size, seq_length, vector_dim):
     return np.random.randint(0, 2, size=[batch_size, seq_length, vector_dim]).astype(np.float32)
 
 
+def generate_psort_data(batch_size, seq_length, vector_dim, max_p=1, min_p=0):
+    x = np.ndarray( shape=(batch_size, seq_length, vector_dim), dtype=np.float32 )
+    y = np.ndarray( shape=(batch_size, seq_length, vector_dim), dtype=np.float32 )
+
+    for b in range(batch_size):
+        # generate one batch
+        dtype = [('p', np.float32), ('bin_vec', np.ndarray)]
+        values = []
+        for i in range(seq_length):
+            # generate vec_dim -1 vector
+            values.append( ( np.random.random()*(max_p-min_p) + min_p , np.random.randint(0, 2, size=[ vector_dim-1, 1 ]).astype(np.float32) ) )
+        # sort data
+        p_vec = np.array(values, dtype=dtype)
+        p_vec_sorted = np.sort(p_vec, order='p')
+        for i in range(seq_length):
+            x[b, i, 0:vector_dim-1] = p_vec[i]['bin_vec'].reshape(vector_dim-1)
+            x[b, i, vector_dim-1] = p_vec[i]['p']
+            y[b, i, 0:vector_dim-1] = p_vec_sorted[i]['bin_vec'].reshape(vector_dim-1)
+            y[b, i, vector_dim-1] = 0
+        #print(x[b, :, :]) 
+        #print(y[b, :, :]) 
+    return x, y
+
+
 def one_hot_encode(x, dim):
     res = np.zeros(np.shape(x) + (dim, ), dtype=np.float32)
     it = np.nditer(x, flags=['multi_index'])
